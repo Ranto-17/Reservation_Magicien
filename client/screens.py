@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 from threading import Thread
+from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog
 from typing import Any
@@ -26,7 +28,7 @@ from kivy.uix.spinner import Spinner
 
 from .services.api import ApiError
 from .theme import DANGER, GOLD, MUTED, NAVY, NAVY_LIGHT, SUCCESS, WHITE
-from .widgets import Card, Field, GoldButton, MessageBar, OfferCard, PageLayout, PhotoPlaceholder, PrimaryButton, Sidebar, StatusBadge, parchment_background, rounded_background, wrapped_label
+from .widgets import Card, Field, GoldButton, MessageBar, OfferCard, PageLayout, PhotoPlaceholder, PrimaryButton, Sidebar, StatusBadge, elevated_background, parchment_background, rounded_background, wrapped_label
 
 
 def title_label(text: str, size: int = 28) -> Label:
@@ -242,21 +244,27 @@ class LoginScreen(BaseScreen):
         self.clear_widgets()
         root = self.content()
         root.add_widget(self.nav_bar("login"))
-        root.add_widget(Label(text="MAGIC RESERVATION", color=GOLD, font_size=dp(20), bold=True, size_hint_y=None, height=dp(45)))
-        root.add_widget(title_label("Bienvenue", 30))
-        root.add_widget(Label(text="Connectez-vous pour réserver votre prestation.", color=MUTED, size_hint_y=None, height=dp(25)))
-        self.email = Field("Adresse e-mail")
+        holder = AnchorLayout(anchor_x="center", anchor_y="center")
+        card = BoxLayout(orientation="vertical", size_hint=(None, None), width=dp(480), height=dp(438), padding=[dp(34), dp(28)], spacing=dp(10))
+        elevated_background(card)
+        holder.bind(width=lambda _, width: setattr(card, "width", min(dp(480), max(dp(280), width - dp(32)))))
+        card.add_widget(Label(text="MAGIC RESERVATION", color=GOLD, font_size=dp(14), bold=True, size_hint_y=None, height=dp(24)))
+        card.add_widget(title_label("Bienvenue", 30))
+        card.add_widget(wrapped_label("Connectez-vous pour réserver votre prestation.", color=MUTED, font_size=dp(13), size_hint_y=None, height=dp(34)))
+        self.email = Field("Adresse e-mail (ex. nom@domaine.com)")
         self.password = Field("Mot de passe", password=True)
-        root.add_widget(self.email)
-        root.add_widget(self.password)
+        card.add_widget(self.email)
+        card.add_widget(self.password)
         self.message = MessageBar()
-        root.add_widget(self.message)
+        card.add_widget(self.message)
         login = GoldButton("Se connecter")
         login.bind(on_release=lambda *_: self.submit())
-        root.add_widget(login)
+        card.add_widget(login)
         register = Button(text="Pas encore de compte ?  Créer un compte", background_normal="", background_color=[0, 0, 0, 0], color=GOLD, size_hint_y=None, height=dp(40))
         register.bind(on_release=lambda *_: self.navigate("register"))
-        root.add_widget(register)
+        card.add_widget(register)
+        holder.add_widget(card)
+        root.add_widget(holder)
         self.add_widget(root)
 
     def submit(self) -> None:
@@ -287,28 +295,40 @@ class RegisterScreen(BaseScreen):
         self.clear_widgets()
         root = self.content()
         root.add_widget(self.nav_bar("register"))
-        root.add_widget(title_label("Créer un compte", 30))
-        root.add_widget(Label(text="Réservez vos prestations en quelques clics.", color=MUTED, size_hint_y=None, height=dp(25)))
+        scroll = ScrollView(do_scroll_x=False)
+        holder = AnchorLayout(anchor_x="center", anchor_y="center", size_hint_y=None, height=dp(610))
+        card = BoxLayout(orientation="vertical", size_hint=(None, None), width=dp(480), height=dp(610), padding=[dp(34), dp(28)], spacing=dp(10))
+        elevated_background(card)
+        holder.bind(width=lambda _, width: setattr(card, "width", min(dp(480), max(dp(280), width - dp(32)))))
+        card.add_widget(Label(text="MAGIC RESERVATION", color=GOLD, font_size=dp(14), bold=True, size_hint_y=None, height=dp(24)))
+        card.add_widget(title_label("Créer un compte", 30))
+        card.add_widget(wrapped_label("Réservez vos prestations en quelques clics.", color=MUTED, font_size=dp(13), size_hint_y=None, height=dp(34)))
         self.full_name = Field("Nom complet")
-        self.email = Field("Adresse e-mail")
+        self.email = Field("Adresse e-mail (ex. nom@domaine.com)")
         self.phone = Field("Téléphone")
         self.password = Field("Mot de passe (8 caractères minimum)", password=True)
         for field in [self.full_name, self.email, self.phone, self.password]:
-            root.add_widget(field)
+            card.add_widget(field)
         self.message = MessageBar()
-        root.add_widget(self.message)
+        card.add_widget(self.message)
         submit = GoldButton("Créer mon compte")
         submit.bind(on_release=lambda *_: self.submit())
-        root.add_widget(submit)
+        card.add_widget(submit)
         back = Button(text="J'ai déjà un compte : me connecter", background_normal="", background_color=[0, 0, 0, 0], color=GOLD, size_hint_y=None, height=dp(40))
         back.bind(on_release=lambda *_: self.navigate("login"))
-        root.add_widget(back)
+        card.add_widget(back)
+        holder.add_widget(card)
+        scroll.add_widget(holder)
+        root.add_widget(scroll)
         self.add_widget(root)
 
     def submit(self) -> None:
         values = [self.full_name.value, self.email.value, self.phone.value, self.password.value]
         if not all(values) or len(self.password.value) < 8:
             self.message.show("Renseignez tous les champs et un mot de passe de 8 caractères.", DANGER)
+            return
+        if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", self.email.value) is None:
+            self.message.show("Adresse e-mail invalide. Utilisez le format nom@domaine.com.", DANGER)
             return
         self.message.show("Création du compte...", MUTED)
         work = lambda: self.api.register(*values)
@@ -692,19 +712,34 @@ class AdminDashboardScreen(BaseScreen):
             if self.booking_filter == "all" or booking["status"] == self.booking_filter
         ]
         for booking in bookings:
-            card = Card(orientation="vertical", size_hint_y=None, height=dp(236), padding=[dp(16), dp(12)], spacing=dp(7))
-            payment = f"{booking.get('payment_method') or '—'} • Référence : {booking.get('payment_reference') or 'non transmise'} • Statut : {booking.get('payment_status', 'a_payer')}"
+            card = Card(orientation="vertical", size_hint_y=None, height=dp(252), padding=[dp(16), dp(12)], spacing=dp(8))
+            payment_status = booking.get("payment_status", "a_payer")
+            payment_label = {
+                "a_payer": "À payer",
+                "soumis": "Paiement soumis",
+                "confirme": "Paiement confirmé",
+            }.get(payment_status, payment_status.replace("_", " ").title())
             header = BoxLayout(size_hint_y=None, height=dp(34), spacing=dp(8))
             header.add_widget(wrapped_label(f"#{booking['id']}  {booking['offer_name']}", color=GOLD, font_size=dp(15), bold=True))
             badge_holder = AnchorLayout(anchor_x="right", anchor_y="center", size_hint_x=None, width=dp(128))
             badge_holder.add_widget(StatusBadge(booking["status"], size_hint_x=None, width=dp(118)))
             header.add_widget(badge_holder)
             card.add_widget(header)
-            content = BoxLayout(orientation="vertical", spacing=dp(2), size_hint_y=None, height=dp(92))
+            content = BoxLayout(orientation="vertical", spacing=dp(3), size_hint_y=None, height=dp(96))
             content.add_widget(wrapped_label(f"Client : {booking['client_name']}  •  {booking['event_type']}", color=WHITE, font_size=dp(12), size_hint_y=None, height=dp(22)))
             content.add_widget(wrapped_label(f"Date : {booking['event_date']}    Heure : {booking['event_time']}    Participants : {booking['participants']}", color=MUTED, font_size=dp(12), size_hint_y=None, height=dp(22)))
             content.add_widget(wrapped_label(f"Adresse : {booking['location']}", color=MUTED, font_size=dp(12), size_hint_y=None, height=dp(24)))
-            content.add_widget(wrapped_label(f"Paiement : {payment}", color=GOLD, font_size=dp(11), size_hint_y=None, height=dp(24)))
+            payment_reference = booking.get("payment_reference") or "non transmise"
+            payment_method = booking.get("payment_method") or "—"
+            content.add_widget(
+                wrapped_label(
+                    f"Paiement : {payment_label}  •  {payment_method}\nRéférence : {payment_reference}",
+                    color=GOLD,
+                    font_size=dp(11),
+                    size_hint_y=None,
+                    height=dp(40),
+                )
+            )
             card.add_widget(content)
             actions = BoxLayout(size_hint_y=None, height=dp(42), spacing=dp(6))
             accept = GoldButton("Accepter", size_hint_x=None, width=dp(100))
@@ -712,7 +747,7 @@ class AdminDashboardScreen(BaseScreen):
             refuse = Button(text="Refuser", background_normal="", background_color=[0, 0, 0, 0], color=DANGER, size_hint_x=None, width=dp(82))
             refuse.bind(on_release=lambda _, booking_id=booking["id"]: self.change_status(booking_id, "refusee"))
             confirm_payment = GoldButton("Paiement", size_hint_x=None, width=dp(100))
-            confirm_payment.disabled = booking.get("payment_status") != "soumis"
+            confirm_payment.disabled = payment_status != "soumis"
             confirm_payment.bind(on_release=lambda _, booking_id=booking["id"]: self.confirm_payment(booking_id))
             details = PrimaryButton("Détails", size_hint_x=None, width=dp(82))
             details.bind(on_release=lambda _, item=booking: self.show_booking_details(item))
@@ -732,7 +767,7 @@ class AdminDashboardScreen(BaseScreen):
                     action.width = 0 if compact else action.width
                     action.height = dp(34)
                 action_row.height = dp(194) if compact else dp(42)
-                booking_card.height = dp(388) if compact else dp(236)
+                booking_card.height = dp(404) if compact else dp(252)
             card.bind(width=adapt_admin_card)
             self.list_box.add_widget(card)
         refresh = PrimaryButton("Actualiser les réservations")
@@ -750,7 +785,8 @@ class AdminDashboardScreen(BaseScreen):
         self.support_box.add_widget(Label(text="Modifier les offres", color=GOLD, font_size=dp(20), bold=True, size_hint_y=None, height=dp(42)))
         self.offer_editors = {}
         for offer in offers:
-            editor = Card(orientation="vertical", size_hint_y=None, height=dp(700), spacing=dp(8))
+            editor = Card(orientation="vertical", size_hint_y=None, spacing=dp(8))
+            editor.bind(minimum_height=editor.setter("height"))
             name = Field("Nom", text=offer["name"])
             subtitle = Field("Sous-titre", text=offer.get("subtitle") or "")
             description = Field("Description principale", text=offer["description"])
