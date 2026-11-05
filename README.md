@@ -1,5 +1,5 @@
 # Réservation Magicien
-admin: Admin@magicien.local
+admin: admin@magicien.local
 mot de passe : ChangeMe123!
 
 Application de réservation de prestations de magie avec API FastAPI/SQLite et
