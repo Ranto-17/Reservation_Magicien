@@ -4,7 +4,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from kivy.graphics import Color, RoundedRectangle
+from kivy.core.image import Image as CoreImage
+from kivy.graphics import Color, Rectangle, RoundedRectangle
 from kivy.metrics import dp
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -19,10 +20,40 @@ from .theme import CARD_RADIUS, DANGER, GOLD, MUTED, NAVY, NAVY_LIGHT, PURPLE, P
 
 
 def rounded_background(widget: Any, color: list[float] = NAVY_LIGHT) -> None:
+    panel_color = [color[0], color[1], color[2], 0.72]
     with widget.canvas.before:
-        Color(*color)
+        Color(*panel_color)
         shape = RoundedRectangle(pos=widget.pos, size=widget.size, radius=CARD_RADIUS)
     widget.bind(pos=lambda *_: setattr(shape, "pos", widget.pos), size=lambda *_: setattr(shape, "size", widget.size))
+
+
+def elevated_background(widget: Any, color: list[float] = NAVY_LIGHT) -> None:
+    panel_color = [color[0], color[1], color[2], 0.42]
+    with widget.canvas.before:
+        Color(*panel_color)
+        shape = RoundedRectangle(pos=widget.pos, size=widget.size, radius=CARD_RADIUS)
+    widget.bind(
+        pos=lambda *_: setattr(shape, "pos", widget.pos),
+        size=lambda *_: setattr(shape, "size", widget.size),
+    )
+
+
+def image_background(widget: Any, source: str) -> None:
+    texture = CoreImage(source).texture
+    with widget.canvas.before:
+        background = Rectangle(pos=widget.pos, size=widget.size, texture=texture)
+        Color(0.03, 0.02, 0.10, 0.38)
+        overlay = Rectangle(pos=widget.pos, size=widget.size)
+    widget.bind(
+        pos=lambda *_: (
+            setattr(background, "pos", widget.pos),
+            setattr(overlay, "pos", widget.pos),
+        ),
+        size=lambda *_: (
+            setattr(background, "size", widget.size),
+            setattr(overlay, "size", widget.size),
+        ),
+    )
 
 
 def parchment_background(widget: Any) -> None:
@@ -63,6 +94,8 @@ class PageLayout(BoxLayout):
     def __init__(self, **kwargs: Any) -> None:
         kwargs.setdefault("orientation", "horizontal")
         super().__init__(**kwargs)
+        background_path = Path(__file__).resolve().parent / "assets" / "app-background.png"
+        image_background(self, str(background_path))
         self.sidebar = BoxLayout(orientation="vertical", size_hint_x=None, width=dp(224), padding=[dp(14), dp(18)], spacing=dp(8))
         self.main = BoxLayout(orientation="vertical", padding=[dp(30), dp(24)], spacing=dp(14))
         rounded_background(self.sidebar, NAVY_LIGHT)
@@ -169,17 +202,24 @@ class PrimaryButton(Button):
     def __init__(self, text: str = "", **kwargs: Any) -> None:
         kwargs.setdefault("text", text)
         kwargs.setdefault("background_normal", "")
-        kwargs.setdefault("background_color", self.normal_color)
+        kwargs.setdefault("background_color", [0, 0, 0, 0])
         kwargs.setdefault("color", self.text_color)
         kwargs.setdefault("font_size", dp(14))
         kwargs.setdefault("bold", True)
         kwargs.setdefault("size_hint_y", None)
         kwargs.setdefault("height", dp(46))
         super().__init__(**kwargs)
+        with self.canvas.before:
+            self._button_color = Color(self.normal_color[0], self.normal_color[1], self.normal_color[2], 0.84)
+            self._button_shape = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(10)])
+        self.bind(
+            pos=lambda *_: setattr(self._button_shape, "pos", self.pos),
+            size=lambda *_: setattr(self._button_shape, "size", self.size),
+        )
         self.bind(state=self._state_changed)
 
     def _state_changed(self, *_: Any) -> None:
-        self.background_color = self.pressed_color if self.state == "down" else self.normal_color
+        self._button_color.rgb = (self.pressed_color if self.state == "down" else self.normal_color)[:3]
 
 
 class GoldButton(PrimaryButton):
